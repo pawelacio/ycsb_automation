@@ -16,19 +16,20 @@ echo "workload;nodes;consistency_level;throughput" > $output_file
 
 nodes=("1" "2" "4" "8")
 hosts_all=("127.0.0.1" "127.0.0.2" "127.0.0.3" "127.0.0.4" "127.0.0.5" "127.0.0.6" "127.0.0.7" "127.0.0.8")
-workload=("workloads/workloada" "workloads/workloadb" "workloads/workloadc" "workloads/workloadf" "workloads/workloadd" "workloads/workloade")
-workloadByLetter=("A" "B" "C" "F" "D" "E")
-consistency=("ONE" "TWO" "THREE" "ALL" "QUORUM" "ANY")
+workload=("workloads/workloada" "workloads/workloadb" "workloads/workloadc" "workloads/workloadf" "workloads/workloadd")
+workloadByLetter=("A" "B" "C" "F" "D")
+consistency=("ONE" "ALL" "QUORUM" "ANY" "TWO" "THREE")
 
 for nodeIX in ${!nodes[*]}
 do
-    sudo service cassandra stop
-    sudo ccm create testCluster -v 2.0.9
-    sudo ccm populate -n ${nodes[$nodeIX]}
-    sudo ccm start
-    sleep 5
-    cqlsh -e "create keyspace ycsb with replication = {'class': 'SimpleStrategy', 'replication_factor':1};"
-    echo "Step6"
+    # reconfigure clusters
+    # sudo service cassandra stop
+    # sudo ccm create testCluster -v 2.0.9
+    # sudo ccm populate -n ${nodes[$nodeIX]}
+    # sudo ccm start
+    # sleep 5
+    # cqlsh -e "create keyspace ycsb with replication = {'class': 'SimpleStrategy', 'replication_factor':${nodes[$nodeIX]}};"
+    # echo "Step6"
 
     # Prepare hosts string
     hosts_string=""
@@ -45,6 +46,13 @@ do
     # for every consistency level
     for consIX in ${!consistency[*]}
     do
+        # reconfigure clusters
+        sudo service cassandra stop
+        sudo ccm create testCluster -v 2.0.9
+        sudo ccm populate -n ${nodes[$nodeIX]}
+        sudo ccm start
+        sleep 5
+        cqlsh -e "create keyspace ycsb with replication = {'class': 'SimpleStrategy', 'replication_factor':${nodes[$nodeIX]}};"
         # load data
         cqlsh -e "use ycsb; drop table usertable;create table usertable (y_id varchar primary key, field0 varchar, field1 varchar, field2 varchar, field3 varchar, field4 varchar, field5 varchar, field6 varchar, field7 varchar, field8 varchar, field9 varchar);"
         ./bin/ycsb load cassandra-cql  -p hosts=$hosts_string -p cassandra.readconistencylevel=${consistency[$consIX]} -p cassandra.writeconsistencylevel=${consistency[$consIX]} -P workloads/workloada
@@ -63,13 +71,15 @@ do
                 then
                     resultThroughput=0
                 else
-                    resultThroughput=`./bin/ycsb run cassandra-cql  -p hosts=$hosts_string -p cassandra.readconistencylevel=${consistency[$consIX]} -p cassandra.writeconsistencylevel=${consistency[$consIX]} -P ${workload[$workIX]} | grep Throughput | cut -d ',' -f3 |  cut -c2- | cut -d '.' -f1`
+                    resultThroughput=`./bin/ycsb run cassandra-cql  -p hosts=$hosts_string -p cassandra.readconistencylevel=${consistency[$consIX]} -p cassandra.writeconsistencylevel=${consistency[$consIX]} -P ${workload[$workIX]} -s | grep Throughput | cut -d ',' -f3 |  cut -c2- | cut -d '.' -f1`
                 fi
                 echo "${workloadByLetter[$workIX]};${nodes[$nodeIX]};${consistency[$consIX]};$resultThroughput" >> $output_file
             done
         done
+        sudo ccm stop
+        sudo ccm remove testCluster
     done
 
-    sudo ccm stop
-    sudo ccm remove testCluster
+    # sudo ccm stop
+    # sudo ccm remove testCluster
 done
